@@ -58,11 +58,20 @@ const PROMPT_2 = `Now generate the chain of thought analysis in the following fo
   }
 }
 
-WEIGHT GUIDELINES:
-- Weight values must be less than 100 (0-99 range)
-- Weight represents the importance/significance of each clash in the debate
-- Higher weight = more important clash (e.g., 80-99 for crucial clashes, 40-79 for important ones, 10-39 for minor ones)
-- Total weights across all clashes don't need to sum to 100
+CRITICAL WEIGHT REQUIREMENTS:
+- Weight MUST be a number between 1 and 99 (inclusive)
+- NO values above 99 are allowed
+- NO percentages - just the raw number (e.g., use 85, NOT 85% or 8500)
+- Weight represents relative importance:
+  * 90-99: Absolutely crucial clash that determines the debate
+  * 70-89: Very important clash with significant impact
+  * 50-69: Important clash that affects the outcome
+  * 30-49: Moderate clash with some relevance
+  * 10-29: Minor clash with limited impact
+  * 1-9: Minimal clash with very little significance
+
+EXAMPLES OF CORRECT WEIGHTS: 85, 72, 45, 23, 8
+EXAMPLES OF INCORRECT WEIGHTS: 8500, 90%, 150, 9000
 
 ⚠️ Only return valid JSON. Do NOT include any commentary or markdown (like \`\`\`).`;
 
@@ -192,8 +201,76 @@ const validateFile = (file) => {
   return fileType;
 };
 
+// Helper function to validate and fix AI response
+const validateAndFixAIResponse = (response, promptType) => {
+  if (!response) return response;
+
+  // Fix weights in chain of thought
+  if (promptType === 'chainOfThought' && response.chainOfThought?.clashes) {
+    response.chainOfThought.clashes = response.chainOfThought.clashes.map(clash => {
+      if (clash.weight > 99) {
+        console.log(`Fixed weight from ${clash.weight} to 99 for clash: ${clash.title}`);
+        clash.weight = 99;
+      } else if (clash.weight < 1) {
+        console.log(`Fixed weight from ${clash.weight} to 1 for clash: ${clash.title}`);
+        clash.weight = 1;
+      }
+      return clash;
+    });
+  }
+
+  // Fix scores in scorecard
+  if (promptType === 'scorecard' && response.scorecard) {
+    Object.keys(response.scorecard).forEach(team => {
+      const scores = response.scorecard[team];
+      ['matter', 'manner', 'method'].forEach(category => {
+        if (scores[category] > 100) {
+          console.log(`Fixed ${category} score from ${scores[category]} to 100 for team: ${team}`);
+          scores[category] = 100;
+        } else if (scores[category] < 0) {
+          console.log(`Fixed ${category} score from ${scores[category]} to 0 for team: ${team}`);
+          scores[category] = 0;
+        }
+      });
+    });
+  }
+
+  // Fix scores in detailed feedback
+  if (promptType === 'detailedFeedback' && response.detailedFeedback?.speakers) {
+    response.detailedFeedback.speakers = response.detailedFeedback.speakers.map(speaker => {
+      ['matter', 'manner', 'method'].forEach(category => {
+        if (speaker.scores[category] > 100) {
+          console.log(`Fixed ${category} score from ${speaker.scores[category]} to 100 for speaker: ${speaker.name}`);
+          speaker.scores[category] = 100;
+        } else if (speaker.scores[category] < 0) {
+          console.log(`Fixed ${category} score from ${speaker.scores[category]} to 0 for speaker: ${speaker.name}`);
+          speaker.scores[category] = 0;
+        }
+      });
+      // Recalculate total
+      speaker.scores.total = speaker.scores.matter + speaker.scores.manner + speaker.scores.method;
+      return speaker;
+    });
+
+    // Fix reply speech scores
+    if (response.detailedFeedback.replySpeeches) {
+      ['proposition', 'opposition'].forEach(side => {
+        if (response.detailedFeedback.replySpeeches[side]?.score > 100) {
+          console.log(`Fixed reply speech score from ${response.detailedFeedback.replySpeeches[side].score} to 100 for ${side}`);
+          response.detailedFeedback.replySpeeches[side].score = 100;
+        } else if (response.detailedFeedback.replySpeeches[side]?.score < 0) {
+          console.log(`Fixed reply speech score from ${response.detailedFeedback.replySpeeches[side].score} to 0 for ${side}`);
+          response.detailedFeedback.replySpeeches[side].score = 0;
+        }
+      });
+    }
+  }
+
+  return response;
+};
+
 // Enhanced error handling for AI requests
-const makeAIRequest = async (prompt, transcriptText, retries = 3) => {
+const makeAIRequest = async (prompt, transcriptText, promptType = 'general', retries = 3) => {
   const model = genAI.getGenerativeModel({ 
     model: 'gemini-2.0-flash',
     generationConfig: {
@@ -213,7 +290,7 @@ const makeAIRequest = async (prompt, transcriptText, retries = 3) => {
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`AI Request attempt ${attempt}/${retries}`);
+      console.log(`AI Request attempt ${attempt}/${retries} for ${promptType}`);
       
       // Add timeout to the request
       const timeoutPromise = new Promise((_, reject) => {
@@ -233,8 +310,12 @@ const makeAIRequest = async (prompt, transcriptText, retries = 3) => {
       const rawText = await Promise.race([requestPromise, timeoutPromise]);
 
       try {
-        const jsonResponse = JSON.parse(cleanMarkdownJson(rawText));
-        console.log(`AI Request successful on attempt ${attempt}`);
+        let jsonResponse = JSON.parse(cleanMarkdownJson(rawText));
+        
+        // Validate and fix the response
+        jsonResponse = validateAndFixAIResponse(jsonResponse, promptType);
+        
+        console.log(`AI Request successful on attempt ${attempt} for ${promptType}`);
         return jsonResponse;
       } catch (parseErr) {
         console.error(`JSON Parse error on attempt ${attempt}:`, parseErr);
@@ -308,9 +389,9 @@ export const createAdjudication = asyncHandler(async (req, res) => {
   console.log('Transcript length:', transcriptText.length, 'characters');
 
   try {
-    const part1 = await makeAIRequest(PROMPT_1, transcriptText);
-    const part2 = await makeAIRequest(PROMPT_2, transcriptText);
-    const part3 = await makeAIRequest(PROMPT_3, transcriptText);
+    const part1 = await makeAIRequest(PROMPT_1, transcriptText, 'scorecard');
+    const part2 = await makeAIRequest(PROMPT_2, transcriptText, 'chainOfThought');
+    const part3 = await makeAIRequest(PROMPT_3, transcriptText, 'detailedFeedback');
 
     const adjudication = await Adjudication.create({
       session: session._id,
@@ -380,9 +461,9 @@ export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
 
     console.log('Starting AI adjudication process for uploaded file...');
     
-    const part1 = await makeAIRequest(PROMPT_1, transcriptText);
-    const part2 = await makeAIRequest(PROMPT_2, transcriptText);
-    const part3 = await makeAIRequest(PROMPT_3, transcriptText);
+    const part1 = await makeAIRequest(PROMPT_1, transcriptText, 'scorecard');
+    const part2 = await makeAIRequest(PROMPT_2, transcriptText, 'chainOfThought');
+    const part3 = await makeAIRequest(PROMPT_3, transcriptText, 'detailedFeedback');
 
     const adjudication = await Adjudication.create({
       session: null,
