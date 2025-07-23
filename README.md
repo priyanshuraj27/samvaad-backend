@@ -19,7 +19,12 @@ Backend API for the Samvaad debate platform built with Node.js, Express, and Mon
 
 ### Steps
 
-1. **Push your code to GitHub** (if not already done)
+1. **Push your code to GitHub** (if not already done):
+   ```bash
+   git add .
+   git commit -m "Prepare for Render deployment"
+   git push origin main
+   ```
 
 2. **Create a new Web Service on Render:**
    - Connect your GitHub repository
