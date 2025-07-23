@@ -32,6 +32,14 @@ Given the full transcript of the debate, generate ONLY this partial adjudication
     }
   }
 }
+
+SCORING GUIDELINES:
+- All scores (matter, manner, method, team rankings) must be out of 100 (0-100 range)
+- Matter: Content, arguments, logic, evidence (0-100)
+- Manner: Delivery, presentation, persuasiveness (0-100) 
+- Method: Structure, time management, teamwork (0-100)
+- Team ranking scores should be the sum of individual speaker scores
+
 ⚠️ Only return valid JSON. Do NOT include any commentary or markdown (like \`\`\`). Invalid JSON will break the application.`;
 
 const PROMPT_2 = `Now generate the chain of thought analysis in the following format also give winner it should not be unclear:
@@ -49,6 +57,13 @@ const PROMPT_2 = `Now generate the chain of thought analysis in the following fo
     ]
   }
 }
+
+WEIGHT GUIDELINES:
+- Weight values must be less than 100 (0-99 range)
+- Weight represents the importance/significance of each clash in the debate
+- Higher weight = more important clash (e.g., 80-99 for crucial clashes, 40-79 for important ones, 10-39 for minor ones)
+- Total weights across all clashes don't need to sum to 100
+
 ⚠️ Only return valid JSON. Do NOT include any commentary or markdown (like \`\`\`).`;
 
 const PROMPT_3 = `Now generate detailed feedback in the following structure:
@@ -75,6 +90,13 @@ const PROMPT_3 = `Now generate detailed feedback in the following structure:
     ]
   }
 }
+
+SCORING GUIDELINES:
+- All individual scores (matter, manner, method) must be out of 100 (0-100 range)
+- Reply speech scores must be out of 100 (0-100 range)
+- Total score should be the sum of matter + manner + method (0-300 range)
+- Be consistent with the scores from the previous prompts
+
 ⚠️ Only return valid JSON. No markdown, explanation, or commentary.`;
 
 // Helper function to extract text from PDF
