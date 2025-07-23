@@ -165,7 +165,6 @@ const cleanupFile = (filePath) => {
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      console.log(`Cleaned up file: ${filePath}`);
     }
   } catch (error) {
     console.error('Failed to cleanup file:', error);
@@ -209,10 +208,8 @@ const validateAndFixAIResponse = (response, promptType) => {
   if (promptType === 'chainOfThought' && response.chainOfThought?.clashes) {
     response.chainOfThought.clashes = response.chainOfThought.clashes.map(clash => {
       if (clash.weight > 99) {
-        console.log(`Fixed weight from ${clash.weight} to 99 for clash: ${clash.title}`);
         clash.weight = 99;
       } else if (clash.weight < 1) {
-        console.log(`Fixed weight from ${clash.weight} to 1 for clash: ${clash.title}`);
         clash.weight = 1;
       }
       return clash;
@@ -225,10 +222,8 @@ const validateAndFixAIResponse = (response, promptType) => {
       const scores = response.scorecard[team];
       ['matter', 'manner', 'method'].forEach(category => {
         if (scores[category] > 100) {
-          console.log(`Fixed ${category} score from ${scores[category]} to 100 for team: ${team}`);
           scores[category] = 100;
         } else if (scores[category] < 0) {
-          console.log(`Fixed ${category} score from ${scores[category]} to 0 for team: ${team}`);
           scores[category] = 0;
         }
       });
@@ -240,10 +235,8 @@ const validateAndFixAIResponse = (response, promptType) => {
     response.detailedFeedback.speakers = response.detailedFeedback.speakers.map(speaker => {
       ['matter', 'manner', 'method'].forEach(category => {
         if (speaker.scores[category] > 100) {
-          console.log(`Fixed ${category} score from ${speaker.scores[category]} to 100 for speaker: ${speaker.name}`);
           speaker.scores[category] = 100;
         } else if (speaker.scores[category] < 0) {
-          console.log(`Fixed ${category} score from ${speaker.scores[category]} to 0 for speaker: ${speaker.name}`);
           speaker.scores[category] = 0;
         }
       });
@@ -256,10 +249,8 @@ const validateAndFixAIResponse = (response, promptType) => {
     if (response.detailedFeedback.replySpeeches) {
       ['proposition', 'opposition'].forEach(side => {
         if (response.detailedFeedback.replySpeeches[side]?.score > 100) {
-          console.log(`Fixed reply speech score from ${response.detailedFeedback.replySpeeches[side].score} to 100 for ${side}`);
           response.detailedFeedback.replySpeeches[side].score = 100;
         } else if (response.detailedFeedback.replySpeeches[side]?.score < 0) {
-          console.log(`Fixed reply speech score from ${response.detailedFeedback.replySpeeches[side].score} to 0 for ${side}`);
           response.detailedFeedback.replySpeeches[side].score = 0;
         }
       });
@@ -290,8 +281,6 @@ const makeAIRequest = async (prompt, transcriptText, promptType = 'general', ret
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`AI Request attempt ${attempt}/${retries} for ${promptType}`);
-      
       // Add timeout to the request
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout after 60 seconds')), 60000);
@@ -315,7 +304,6 @@ const makeAIRequest = async (prompt, transcriptText, promptType = 'general', ret
         // Validate and fix the response
         jsonResponse = validateAndFixAIResponse(jsonResponse, promptType);
         
-        console.log(`AI Request successful on attempt ${attempt} for ${promptType}`);
         return jsonResponse;
       } catch (parseErr) {
         console.error(`JSON Parse error on attempt ${attempt}:`, parseErr);
@@ -340,7 +328,6 @@ const makeAIRequest = async (prompt, transcriptText, promptType = 'general', ret
       }
       
       if (error.message?.includes('timeout')) {
-        console.log(`Request timed out on attempt ${attempt}`);
         if (attempt === retries) {
           throw new ApiError(504, 'AI service is taking too long to respond. Please try again later.');
         }
@@ -350,7 +337,6 @@ const makeAIRequest = async (prompt, transcriptText, promptType = 'general', ret
       }
       
       if (error.message?.includes('fetch failed') || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-        console.log(`Network error on attempt ${attempt}:`, error.message);
         if (attempt === retries) {
           throw new ApiError(503, 'Unable to connect to AI service. Please check your internet connection and try again.');
         }
@@ -385,9 +371,6 @@ export const createAdjudication = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Debate session has no transcript data');
   }
 
-  console.log('Starting AI adjudication for session:', sessionId);
-  console.log('Transcript length:', transcriptText.length, 'characters');
-
   try {
     const part1 = await makeAIRequest(PROMPT_1, transcriptText, 'scorecard');
     const part2 = await makeAIRequest(PROMPT_2, transcriptText, 'chainOfThought');
@@ -402,8 +385,6 @@ export const createAdjudication = asyncHandler(async (req, res) => {
       ...part3,
     });
 
-    console.log('Adjudication created successfully for session:', sessionId);
-
     return res
       .status(201)
       .json(new ApiResponse(201, "Adjudication created", adjudication));
@@ -415,19 +396,10 @@ export const createAdjudication = asyncHandler(async (req, res) => {
 });
 
 export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
-  console.log('=== Upload Request Debug Info ===');
-  console.log('Body:', req.body);
-  console.log('File:', req.file);
-  console.log('Files:', req.files);
-  console.log('Headers:', req.headers);
-  console.log('Content-Type:', req.get('Content-Type'));
-  console.log('================================');
-
   const { formatName, motion, teams } = req.body;
   
   // More detailed file validation
   if (!req.file) {
-    console.log('No file found in request');
     throw new ApiError(400, 'No file uploaded. Please ensure you selected a file and it is properly attached to the "transcript" field.');
   }
   
@@ -443,9 +415,6 @@ export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
   const filePath = req.file.path;
 
   try {
-    console.log(`Processing ${fileType} file: ${filePath}`);
-    console.log(`File size: ${req.file.size} bytes`);
-    
     // Extract text based on file type
     if (fileType === 'application/pdf') {
       transcriptText = await extractTextFromPDF(filePath);
@@ -453,13 +422,9 @@ export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
       transcriptText = readTextFile(filePath);
     }
 
-    console.log(`Extracted text length: ${transcriptText.length} characters`);
-
     if (!transcriptText.trim()) {
       throw new ApiError(400, 'The uploaded file appears to be empty or contains no readable text');
     }
-
-    console.log('Starting AI adjudication process for uploaded file...');
     
     const part1 = await makeAIRequest(PROMPT_1, transcriptText, 'scorecard');
     const part2 = await makeAIRequest(PROMPT_2, transcriptText, 'chainOfThought');
@@ -477,8 +442,6 @@ export const createAdjudicationFromUpload = asyncHandler(async (req, res) => {
       ...part2,
       ...part3,
     });
-
-    console.log('Adjudication created successfully for uploaded file');
 
     return res
       .status(201)
