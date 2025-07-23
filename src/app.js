@@ -4,14 +4,33 @@ import cors from 'cors';
 const app = express();
 // console.log("app.js");
 app.use(cors({
-    origin : process.env.CORS_ORIGIN,
-    credentials : true
+    origin: process.env.CORS_ORIGIN || "*",
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }))
 
  app.use(express.json({limit : "16kb"}));
  app.use(urlencoded({extended : true}));
  app.use(express.static('public'));
  app.use(cookieParser());
+ 
+// Health check endpoint
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Samvaad Backend API is running!',
+        status: 'active',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'OK', 
+        message: 'Server is healthy',
+        timestamp: new Date().toISOString()
+    });
+});
  
 // Routes import 
 
