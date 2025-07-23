@@ -38,7 +38,7 @@ Backend API for the Samvaad debate platform built with Node.js, Express, and Mon
    NODE_ENV=production
    PORT=10000
    MONGODB_URI=your_mongodb_connection_string
-   CORS_ORIGIN=your_frontend_url
+   CORS_ORIGIN=https://samvaad-frontend-delta.vercel.app
    ACCESS_TOKEN_SECRET=your_access_token_secret
    ACCESS_TOKEN_EXPIRY=1d
    REFRESH_TOKEN_SECRET=your_refresh_token_secret
