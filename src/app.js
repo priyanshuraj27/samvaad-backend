@@ -4,7 +4,26 @@ import cors from 'cors';
 const app = express();
 // console.log("app.js");
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || "*",
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or Postman)
+        if (!origin) return callback(null, true);
+        
+        // If CORS_ORIGIN is set, use it; otherwise allow all origins
+        const allowedOrigins = process.env.CORS_ORIGIN ? 
+            process.env.CORS_ORIGIN.split(',').map(o => o.trim()) : 
+            [origin]; // Allow the requesting origin
+        
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        
+        // For development, allow any origin if CORS_ORIGIN is not set
+        if (!process.env.CORS_ORIGIN) {
+            return callback(null, true);
+        }
+        
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
